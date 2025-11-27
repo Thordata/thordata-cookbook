@@ -1,4 +1,15 @@
-.env
-venv/
+# Python
 __pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local data / cache / outputs
 data/
+*.csv
+knowledge_base_sample.md
