@@ -12,4 +12,5 @@ venv/
 # Local data / cache / outputs
 data/
 *.csv
+
 knowledge_base_sample.md

@@ -1,28 +1,56 @@
 """
-RAG Data Pipeline Example
+RAG Data Pipeline CLI
 
 This script demonstrates how to:
 1. Use Thordata's Universal Scraping API to fetch a fully rendered web page.
-2. Clean the noisy HTML into a Markdown-like text suitable for RAG / LLMs.
-3. Save the result to a local file (knowledge_base_sample.md).
+2. Clean noisy HTML into Markdown-style text suitable for RAG / LLMs.
+3. Save the result to a local file (e.g. knowledge_base_sample.md).
+
+Usage (from the repository root):
+
+    python -m scripts.rag_data_pipeline \
+        --url https://openai.com/research/ \
+        --output data/openai_research.md
+
+You can also customize JS rendering, country, and resource blocking.
 """
 
+from __future__ import annotations
+
+import argparse
+import logging
 import os
-from typing import List
+from pathlib import Path
+from typing import List, Optional
 
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
-from thordata import ThordataClient  # Note: new import path
+from thordata import ThordataClient
 
 
-# Load environment variables from .env
-load_dotenv()
+# ---------------------------------------------------------------------------
+# Configuration & logging
+# ---------------------------------------------------------------------------
+
+# Resolve project root (two levels above this file: scripts/ -> repo root)
+ROOT_DIR = Path(__file__).resolve().parents[1]
+
+# Ensure we always load the .env from the repo root, no matter where we run from
+ENV_PATH = ROOT_DIR / ".env"
+load_dotenv(ENV_PATH)
+
+logger = logging.getLogger("thordata.rag")
+
+
+# ---------------------------------------------------------------------------
+# HTML -> Markdown cleaning
+# ---------------------------------------------------------------------------
 
 
 def clean_html_to_markdown(html_content: str) -> str:
     """
-    Basic ETL step: convert messy HTML into LLM-friendly Markdown-style text.
+    Convert messy HTML into Markdown-style text suitable for RAG / LLMs.
 
     The logic here is intentionally simple and opinionated:
     - Remove scripts, styles, navigation, and other non-content elements.
@@ -60,48 +88,148 @@ def clean_html_to_markdown(html_content: str) -> str:
     return "\n".join(markdown_lines)
 
 
-def main() -> None:
-    """Run the RAG data pipeline for a single URL."""
-    # 1. Initialize client from environment variables
+# ---------------------------------------------------------------------------
+# CLI argument parsing
+# ---------------------------------------------------------------------------
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="RAG Data Pipeline using Thordata Universal Scraping API",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--url",
+        type=str,
+        default="https://openai.com/research/",
+        help="Target URL to scrape.",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="knowledge_base_sample.md",
+        help="Path of the output markdown file.",
+    )
+    parser.add_argument(
+        "--country",
+        type=str,
+        default=None,
+        help="Optional geo-targeting country code (e.g. 'us', 'de').",
+    )
+    parser.add_argument(
+        "--no-js",
+        dest="js_render",
+        action="store_false",
+        help="Disable JavaScript rendering to speed up scraping.",
+    )
+    parser.set_defaults(js_render=True)
+    parser.add_argument(
+        "--block-resources",
+        action="store_true",
+        help="Block images/css to speed up page load.",
+    )
+
+    return parser.parse_args()
+
+
+# ---------------------------------------------------------------------------
+# Main pipeline
+# ---------------------------------------------------------------------------
+
+
+def build_client() -> ThordataClient:
+    """Initialize ThordataClient from environment variables."""
     scraper_token = os.getenv("THORDATA_SCRAPER_TOKEN")
     public_token = os.getenv("THORDATA_PUBLIC_TOKEN")
     public_key = os.getenv("THORDATA_PUBLIC_KEY")
 
     if not scraper_token:
-        print("❌ Error: .env file not found or THORDATA_SCRAPER_TOKEN is missing.")
-        return
-
-    client = ThordataClient(scraper_token, public_token, public_key)
-
-    # 2. Target URL (example: OpenAI research page)
-    target_url = "https://openai.com/research/"
-    print(f"🚀 Starting RAG pipeline for: {target_url}")
-
-    try:
-        # 3. Fetch rendered HTML via Universal API
-        print("   Requesting Universal Scraper...")
-        html = client.universal_scrape(
-            url=target_url,
-            js_render=True,          # Enable JS rendering for modern sites
-            output_format="HTML",
+        raise RuntimeError(
+            "THORDATA_SCRAPER_TOKEN is missing. "
+            "Please create a .env file at the project root and set your tokens."
         )
-        print(f"✅ Scrape success. Length: {len(html)} characters")
 
-        # 4. Clean & transform HTML into Markdown-like text
-        print("   Cleaning and transforming HTML...")
-        markdown_content = clean_html_to_markdown(html)
+    return ThordataClient(
+        scraper_token=scraper_token,
+        public_token=public_token,
+        public_key=public_key,
+    )
 
-        # 5. Save result to file
-        output_file = "knowledge_base_sample.md"
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(f"Source: {target_url}\n\n")
-            f.write(markdown_content)
 
-        print(f"🎉 Pipeline completed! Data saved to '{output_file}'")
-        print("   This file is ready for vector database embedding.")
-    except Exception as e:
-        print(f"❌ Pipeline failed: {e}")
+def run_pipeline(
+    url: str,
+    output_path: Path,
+    js_render: bool = True,
+    country: Optional[str] = None,
+    block_resources: bool = False,
+) -> None:
+    """
+    Run the full RAG pipeline for a single URL.
+
+    Args:
+        url: Target URL.
+        output_path: Path to the markdown output file.
+        js_render: Whether to enable JS rendering.
+        country: Optional country code for geo-targeting.
+        block_resources: Whether to block heavy resources.
+    """
+    client = build_client()
+
+    logger.info("Starting RAG pipeline for URL: %s", url)
+    logger.info(
+        "Options -> js_render=%s, country=%s, block_resources=%s",
+        js_render,
+        country,
+        block_resources,
+    )
+
+    # 1. Fetch rendered HTML via Universal API
+    logger.info("Requesting Universal Scraper...")
+    html = client.universal_scrape(
+        url=url,
+        js_render=js_render,
+        output_format="HTML",
+        country=country,
+        block_resources=block_resources,
+    )
+    logger.info("Scrape success. HTML length: %d characters", len(html))
+
+    # 2. Clean & transform HTML into Markdown-like text
+    logger.info("Cleaning and transforming HTML...")
+    markdown_content = clean_html_to_markdown(html)
+
+    # Ensure parent directory exists
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 3. Save result to file
+    logger.info("Saving markdown to %s", output_path)
+    with output_path.open("w", encoding="utf-8") as f:
+        f.write(f"Source: {url}\n\n")
+        f.write(markdown_content)
+
+    logger.info("Pipeline completed successfully.")
+    logger.info("Output file is ready for vector database embedding.")
+
+
+def main() -> None:
+    args = parse_args()
+    try:
+        output_path = (ROOT_DIR / args.output).resolve()
+        run_pipeline(
+            url=args.url,
+            output_path=output_path,
+            js_render=args.js_render,
+            country=args.country,
+            block_resources=args.block_resources,
+        )
+    except Exception as exc:
+        logger.error("Pipeline failed: %s", exc, exc_info=True)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(levelname)s] %(message)s",
+    )
     main()
