@@ -14,3 +14,6 @@ data/
 *.csv
 
 knowledge_base_sample.md
+
+.env
+
