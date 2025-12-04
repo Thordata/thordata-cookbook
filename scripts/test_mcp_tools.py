@@ -1,7 +1,7 @@
 """
 Quick local test for MCP tools without an MCP client.
 """
-
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pprint import pprint
 
 from scripts.mcp_server import search_web, search_news, read_website, extract_links

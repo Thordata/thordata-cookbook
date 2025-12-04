@@ -34,17 +34,20 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
-from thordata import ThordataClient, Engine
-
+from thordata import (
+    ThordataClient,
+    Engine,
+    ThordataRateLimitError,
+    ThordataAuthError,
+    ThordataAPIError,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration & client initialization
 # ---------------------------------------------------------------------------
 
-# Resolve project root (two levels above this file: scripts/ -> repo root)
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
-# Load .env from the repo root
 ENV_PATH = ROOT_DIR / ".env"
 load_dotenv(ENV_PATH)
 
@@ -69,14 +72,12 @@ client = ThordataClient(
 # Name visible to the MCP client (e.g. Claude)
 mcp = FastMCP("Thordata Tools")
 
-# Map simple engine names to the Engine enum
 _ENGINE_MAP: Dict[str, Engine] = {
     "google": Engine.GOOGLE,
     "bing": Engine.BING,
     "yandex": Engine.YANDEX,
     "duckduckgo": Engine.DUCKDUCKGO,
 }
-
 
 # ---------------------------------------------------------------------------
 # Helper: HTML -> cleaned text
@@ -92,14 +93,12 @@ def clean_html_to_text(html: str) -> str:
     """
     soup = BeautifulSoup(html, "html.parser")
 
-    # Remove noisy elements
     for tag in soup(["script", "style", "nav", "footer", "svg", "iframe", "noscript"]):
         tag.decompose()
 
     text = soup.get_text(separator="\n")
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    clean_text = "\n".join(lines)
-    return clean_text
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -121,14 +120,12 @@ def search_web(
     Args:
         query: The search keywords.
         engine: Search engine to use: 'google', 'bing', 'yandex', 'duckduckgo'.
-                Defaults to 'google'.
         num: Number of results to retrieve (default: 5).
         location: Optional location string (e.g. 'United States', 'London').
-        search_type: Optional search type for engines that support it
-                     (e.g. 'shopping', 'news', 'images', 'videos').
+        search_type: Optional search type (e.g. 'shopping', 'news', 'images', 'videos').
 
     Returns:
-        A JSON-formatted string containing:
+        JSON string:
         {
           "engine": "...",
           "query": "...",
@@ -138,58 +135,60 @@ def search_web(
           ]
         }
     """
+    engine_key = (engine or "google").lower()
+    engine_enum = _ENGINE_MAP.get(engine_key, Engine.GOOGLE)
+
+    logger.info(
+        "[MCP] search_web -> query=%r, engine=%s, num=%s, location=%r, type=%r",
+        query,
+        engine_key,
+        num,
+        location,
+        search_type,
+    )
+
+    extra_params: Dict[str, str] = {}
+    if location:
+        extra_params["location"] = location
+    if search_type:
+        extra_params["type"] = search_type
+
     try:
-        engine_key = (engine or "google").lower()
-        engine_enum = _ENGINE_MAP.get(engine_key, Engine.GOOGLE)
-
-        logger.info(
-            "[MCP] search_web -> query=%r, engine=%s, num=%s, location=%r, type=%r",
-            query,
-            engine_key,
-            num,
-            location,
-            search_type,
-        )
-
-        extra_params: Dict[str, str] = {}
-        if location:
-            extra_params["location"] = location
-        if search_type:
-            # For Google this usually maps to tbm / type parameters; we rely on
-            # the backend / SDK to forward correctly.
-            extra_params["type"] = search_type
-
         results = client.serp_search(
             query=query,
             engine=engine_enum,
             num=num,
             **extra_params,
         )
-
-        organic: List[Dict] = results.get("organic") or []
-        if not organic:
-            return json.dumps(
-                {"message": "No organic results found.", "engine": engine_key},
-                ensure_ascii=False,
-                indent=2,
-            )
-
-        clean_results: List[Dict[str, str]] = []
-        for idx, item in enumerate(organic, start=1):
-            clean_results.append(
-                {
-                    "rank": idx,
-                    "title": item.get("title"),
-                    "link": item.get("link"),
-                    "snippet": item.get("snippet"),
-                }
-            )
-
+    except ThordataRateLimitError as e:
         return json.dumps(
             {
                 "engine": engine_key,
                 "query": query,
-                "results": clean_results,
+                "error_type": "thordata_rate_limit",
+                "error": str(e),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except ThordataAuthError as e:
+        return json.dumps(
+            {
+                "engine": engine_key,
+                "query": query,
+                "error_type": "thordata_auth",
+                "error": str(e),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except ThordataAPIError as e:
+        return json.dumps(
+            {
+                "engine": engine_key,
+                "query": query,
+                "error_type": "thordata_api",
+                "error": str(e),
             },
             ensure_ascii=False,
             indent=2,
@@ -197,10 +196,39 @@ def search_web(
     except Exception as exc:
         logger.exception("search_web failed: %s", exc)
         return json.dumps(
-            {"error": f"Search Error: {exc!s}", "engine": engine},
+            {"engine": engine_key, "query": query, "error_type": "unknown", "error": str(exc)},
             ensure_ascii=False,
             indent=2,
         )
+
+    organic: List[Dict] = results.get("organic") or []
+    if not organic:
+        return json.dumps(
+            {"message": "No organic results found.", "engine": engine_key, "query": query},
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    clean_results: List[Dict[str, str]] = []
+    for idx, item in enumerate(organic, start=1):
+        clean_results.append(
+            {
+                "rank": idx,
+                "title": item.get("title"),
+                "link": item.get("link"),
+                "snippet": item.get("snippet"),
+            }
+        )
+
+    return json.dumps(
+        {
+            "engine": engine_key,
+            "query": query,
+            "results": clean_results,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -216,18 +244,7 @@ def search_news(
     location: Optional[str] = None,
 ) -> str:
     """
-    Convenience wrapper around search_web() to search for **news**.
-
-    Args:
-        query: The search keywords.
-        engine: Search engine to use (default: 'google').
-        num: Number of results to retrieve.
-        location: Optional location string.
-
-    Returns:
-        Same JSON structure as search_web(), but with search_type='news'.
-    """
-    # Internally we just call search_web with a fixed search_type
+    Convenience wrapper around search_web() to search for **news**."""
     return search_web(
         query=query,
         engine=engine,
@@ -255,45 +272,41 @@ def read_website(
     Useful for:
     - Summarizing articles or documentation.
     - Extracting relevant text from dynamic sites.
-
-    Args:
-        url: The target URL.
-        js_render: Whether to enable JavaScript rendering (default: True).
-        country: Optional country code for geo-targeting (e.g. 'us').
-        max_chars: Maximum number of characters to return, to stay within
-                   token limits.
-
-    Returns:
-        A plain-text representation of the page, truncated for token safety.
     """
-    try:
-        logger.info(
-            "[MCP] read_website -> url=%r, js_render=%s, country=%r, max_chars=%d",
-            url,
-            js_render,
-            country,
-            max_chars,
-        )
+    logger.info(
+        "[MCP] read_website -> url=%r, js_render=%s, country=%r, max_chars=%d",
+        url,
+        js_render,
+        country,
+        max_chars,
+    )
 
+    try:
         html = client.universal_scrape(
             url=url,
             js_render=js_render,
             output_format="HTML",
             country=country,
         )
-
-        if not html or len(html) < 100:
-            return f"Error: Failed to retrieve content or content is empty. URL: {url}"
-
-        clean_text = clean_html_to_text(html)
-
-        if max_chars and len(clean_text) > max_chars:
-            clean_text = clean_text[:max_chars]
-
-        return f"Source: {url}\n\n{clean_text}"
+    except ThordataRateLimitError as e:
+        return f"Thordata Universal API rate/quota issue: {e}"
+    except ThordataAuthError as e:
+        return f"Thordata Universal API authentication error: {e}"
+    except ThordataAPIError as e:
+        return f"Thordata Universal API returned an error: {e}"
     except Exception as exc:
         logger.exception("read_website failed: %s", exc)
         return f"Scrape Error: {exc!s}"
+
+    if not html or len(html) < 100:
+        return f"Error: Failed to retrieve content or content is empty. URL: {url}"
+
+    clean_text = clean_html_to_text(html)
+
+    if max_chars and len(clean_text) > max_chars:
+        clean_text = clean_text[:max_chars]
+
+    return f"Source: {url}\n\n{clean_text}"
 
 
 # ---------------------------------------------------------------------------
@@ -310,98 +323,95 @@ def extract_links(
     unique: bool = True,
 ) -> str:
     """
-    Extract hyperlinks from the given URL.
+    Extract hyperlinks from the given URL."""
+    logger.info(
+        "[MCP] extract_links -> url=%r, js_render=%s, country=%r, max_links=%d, unique=%s",
+        url,
+        js_render,
+        country,
+        max_links,
+        unique,
+    )
 
-    Args:
-        url: The target URL.
-        js_render: Whether to enable JavaScript rendering (default: False).
-        country: Optional country code for geo-targeting.
-        max_links: Maximum number of links to return.
-        unique: Whether to deduplicate links by their final URL.
-
-    Returns:
-        JSON string:
-        {
-          "source": "...",
-          "count": N,
-          "links": [
-            { "text": "...", "href": "absolute_url" },
-            ...
-          ]
-        }
-    """
     try:
-        logger.info(
-            "[MCP] extract_links -> url=%r, js_render=%s, country=%r, max_links=%d, unique=%s",
-            url,
-            js_render,
-            country,
-            max_links,
-            unique,
-        )
-
         html = client.universal_scrape(
             url=url,
             js_render=js_render,
             output_format="HTML",
             country=country,
         )
-
-        if not html or len(html) < 100:
-            return json.dumps(
-                {
-                    "source": url,
-                    "count": 0,
-                    "links": [],
-                    "message": "Failed to retrieve content or content is empty.",
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-
-        soup = BeautifulSoup(html, "html.parser")
-
-        links: List[Dict[str, str]] = []
-        seen: set[str] = set()
-
-        for a in soup.find_all("a", href=True):
-            href = a["href"].strip()
-            text = a.get_text(strip=True) or href
-
-            # Resolve relative URLs
-            abs_url = urljoin(url, href)
-
-            if unique:
-                if abs_url in seen:
-                    continue
-                seen.add(abs_url)
-
-            links.append(
-                {
-                    "text": text,
-                    "href": abs_url,
-                }
-            )
-
-            if max_links and len(links) >= max_links:
-                break
-
+    except ThordataRateLimitError as e:
         return json.dumps(
-            {
-                "source": url,
-                "count": len(links),
-                "links": links,
-            },
+            {"source": url, "error_type": "thordata_rate_limit", "error": str(e)},
+            ensure_ascii=False,
+            indent=2,
+        )
+    except ThordataAuthError as e:
+        return json.dumps(
+            {"source": url, "error_type": "thordata_auth", "error": str(e)},
+            ensure_ascii=False,
+            indent=2,
+        )
+    except ThordataAPIError as e:
+        return json.dumps(
+            {"source": url, "error_type": "thordata_api", "error": str(e)},
             ensure_ascii=False,
             indent=2,
         )
     except Exception as exc:
         logger.exception("extract_links failed: %s", exc)
         return json.dumps(
-            {"source": url, "error": f"Extract Links Error: {exc!s}"},
+            {"source": url, "error_type": "unknown", "error": str(exc)},
             ensure_ascii=False,
             indent=2,
         )
+
+    if not html or len(html) < 100:
+        return json.dumps(
+            {
+                "source": url,
+                "count": 0,
+                "links": [],
+                "message": "Failed to retrieve content or content is empty.",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    links: List[Dict[str, str]] = []
+    seen: set[str] = set()
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        text = a.get_text(strip=True) or href
+        abs_url = urljoin(url, href)
+
+        if unique:
+            if abs_url in seen:
+                continue
+            seen.add(abs_url)
+
+        links.append(
+            {
+                "text": text,
+                "href": abs_url,
+            }
+        )
+
+        if max_links and len(links) >= max_links:
+            break
+
+    return json.dumps(
+        {
+            "source": url,
+            "count": len(links),
+            "links": links,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 # ---------------------------------------------------------------------------
