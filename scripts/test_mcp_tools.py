@@ -1,13 +1,22 @@
 """
 Quick local test for MCP tools without an MCP client.
 """
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from __future__ import annotations
+
+import os
+import sys
 from pprint import pprint
 
-from scripts.mcp_server import search_web, search_news, read_website, extract_links
 
+def main() -> int:
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
 
-def main():
+    # Import after sys.path adjustment (inside function to satisfy Ruff E402)
+    from scripts.mcp_server import extract_links, read_website, search_news, search_web
+
     # 1. Test web search
     print("\n=== search_web (google) ===")
     result = search_web("Thordata proxy network", engine="google", num=3)
@@ -28,6 +37,8 @@ def main():
     links_json = extract_links("https://www.example.com", js_render=False, max_links=10)
     pprint(links_json)
 
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
