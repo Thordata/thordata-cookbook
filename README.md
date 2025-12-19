@@ -1,33 +1,38 @@
-# Thordata Cookbook
+# 🍳 Thordata Cookbook
 
-End-to-end examples and notebooks built on top of the
-[Thordata Python SDK](https://github.com/Thordata/thordata-python-sdk).
+[![Thordata SDK](https://img.shields.io/badge/SDK-Thordata%20Python-blue?style=flat-square)](https://github.com/Thordata/thordata-python-sdk)
+[![License](https://img.shields.io/github/license/Thordata/thordata-cookbook?style=flat-square)](LICENSE)
+
+End-to-end examples, scripts, and notebooks built on top of the [Thordata Python SDK](https://github.com/Thordata/thordata-python-sdk).
 
 These recipes show how to combine:
 
-- Thordata **SERP API**
-- Thordata **Universal Scraper API**
+- Thordata **SERP API** & **Universal Scraper**
 - Thordata **Web Scraper API**
 - Modern AI tools (OpenAI, LangChain, MCP)
-- Classic data tools (Pandas, BeautifulSoup)
-
-to build practical AI & data pipelines.
+- Data tools (Pandas, BeautifulSoup)
 
 ---
 
 ## 🧾 Recipe Index
 
+### Built-in Notebooks & Scripts
+
 | Recipe | Type | Description |
 |-------|------|-------------|
-| **Web Q&A Agent** | Notebook | `notebooks/ai/web_qa_agent_with_thordata.ipynb` — Ask natural-language questions, search the web via Thordata SERP, scrape pages via Universal Scraper, clean HTML to text, and let an LLM answer with citations. Supports live mode and offline (cached) mode. |
-| **GitHub Repo Intelligence** | Notebook | `notebooks/devtools/github_repo_intel.ipynb` — Use Thordata Web Scraper API spiders to collect GitHub repository metadata (stars, forks, issues, contributors, language) and analyze it with Pandas for competitor / portfolio analysis. |
-| **OpenAI Research RAG Prep** | Notebook | `notebooks/rag/rag_openai_research.ipynb` — Scrape dynamic pages (e.g. OpenAI Research), clean HTML, and export a Markdown knowledge base suitable for vector databases and RAG systems. |
-| **RAG Data Pipeline (script)** | Script | `scripts/rag_data_pipeline.py` — CLI version of the RAG preparation pipeline: Universal Scraper → HTML cleaning → Markdown export, with CLI flags for URL, JS rendering, country, etc. |
-| **MCP Tools for LLMs** | Script | `scripts/mcp_server.py` — Model Context Protocol (MCP) server exposing `search_web`, `search_news`, `read_website`, and `extract_links` as tools to LLMs (e.g. Claude Desktop). |
-| **MCP Tools Tester** | Script | `scripts/test_mcp_tools.py` — Local test harness to call the MCP tools directly from Python without Claude, useful for debugging and exploration. |
+| **Web Q&A Agent** | Notebook | `notebooks/ai/web_qa_agent_with_thordata.ipynb`<br>Ask questions, search SERP, scrape pages, and let an LLM answer with citations. Supports live & offline modes. |
+| **GitHub Repo Intel** | Notebook | `notebooks/devtools/github_repo_intel.ipynb`<br>Use Web Scraper API spiders to collect GitHub repository metadata (stars, forks, issues) and analyze it with Pandas. |
+| **OpenAI Research RAG** | Notebook | `notebooks/rag/rag_openai_research.ipynb`<br>Scrape dynamic pages, clean HTML, and export a Markdown knowledge base for RAG systems. |
+| **RAG Data Pipeline** | Script | `scripts/rag_data_pipeline.py`<br>CLI version of the RAG preparation pipeline: Scrape → Clean → Markdown, with CLI flags for URL/country/JS rendering. |
+| **MCP Tools for LLMs** | Script | `scripts/mcp_server.py`<br>Model Context Protocol (MCP) server exposing `search_web`, `search_news`, `read_website` to Claude Desktop or other LLMs. |
 
-> All recipes assume you have Thordata credentials and (optionally) an OpenAI
-> API key configured via `.env` at the project root.
+### External Standalone Examples
+
+| Repository | Description |
+|------------|-------------|
+| **[thordata-web-qa-agent](https://github.com/Thordata/thordata-web-qa-agent)** | A standalone CLI version of the Web Q&A Agent, easy to fork and deploy. |
+| **[google-play-reviews-rag](https://github.com/Thordata/google-play-reviews-rag)** | Fetch Google Play reviews via Web Scraper API, build embeddings, and run RAG QA on user feedback. |
+| **[google-news-scraper](https://github.com/Thordata/google-news-scraper)** | Specialized CLI for Google News scraping with advanced filtering (topic, publication, time). |
 
 ---
 
@@ -49,23 +54,17 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-The requirements.txt includes:
-
-- thordata-sdk — Thordata Python SDK
-- python-dotenv — for loading .env
-- beautifulsoup4, pandas — HTML cleaning & analysis
-- openai — for LLM calls in Web QA / RAG recipes
-- mcp / related dependencies — for MCP server (Claude tools)
+---
 
 ## 🔐 Configuration
 
-At the root of the repo there is an .env.example. Copy it to .env and fill
-in your own credentials:
+Copy `.env.example` to `.env` and fill in your credentials:
 
 ```bash
 cp .env.example .env
-Edit .env:
 ```
+
+Edit `.env`:
 
 ```env
 THORDATA_SCRAPER_TOKEN=your_thordata_scraper_token
@@ -74,138 +73,82 @@ THORDATA_PUBLIC_KEY=your_thordata_public_key
 
 # Optional: for OpenAI-based recipes
 OPENAI_API_KEY=sk-...
-
-# Optional: MCP-related settings, if needed
-MCP_SERVER_PORT=...
 ```
 
-Notebooks and scripts will automatically load this .env from the project root.
+---
 
-## 🧪 Running the scripts (CLI)
+## 🧪 Running Scripts (CLI)
 
-### 1. RAG data pipeline
+### 1. RAG Data Pipeline
 
-`scripts/rag_data_pipeline.py` is a command-line tool that:
-
-1. Calls Thordata Universal Scraper to fetch a dynamic HTML page.
-2. Cleans it with BeautifulSoup (removing scripts, navigation, etc.).
-3. Exports a Markdown knowledge base file for use in RAG systems.
-
-Example:
+Fetch, clean, and save page content as Markdown:
 
 ```bash
 python scripts/rag_data_pipeline.py \
   --url "https://openai.com/research" \
-  --output "data/openai_research_knowledge_base.md" \
+  --output "data/openai_research_kb.md" \
   --country "us" \
-  --js-render \
-  --block-resources
+  --js-render
 ```
 
-See the script docstring and --help output for all available options.
+### 2. MCP Server (Claude Tools)
 
-### 2. MCP server (for Claude / other MCP clients)
-
-`scripts/mcp_server.py` implements an MCP server exposing Thordata-backed tools:
-
-- `search_web` — multi-engine SERP search (Google/Bing/Yandex/DDG), with optional search_type.
-- `search_news` — convenience wrapper for news-focused search.
-- `read_website` — Universal Scraper + HTML cleaning, returning LLM-friendly text.
-- `extract_links` — extract {text, href} link structures from a page.
-
-Run locally:
+Expose Thordata tools to an MCP client:
 
 ```bash
 python scripts/mcp_server.py
 ```
 
-Then configure your MCP-capable client (e.g. Claude Desktop) to connect to this
-server. The exact configuration depends on the client; see MCP docs for details.
-
-You can test the tools without MCP client using:
+Or test tools locally without a client:
 
 ```bash
-python scripts/test_mcp_tools.py
+python -m scripts.test_mcp_tools
 ```
 
-## 📒 Running the notebooks
+---
 
-### Recommended workflow
+## 📒 Running Notebooks
 
-Start your virtual environment:
+1. **Activate environment**: 
+   ```bash
+   source .venv/Scripts/activate
+   ```
 
-```bash
-cd thordata-cookbook
-.venv\Scripts\activate   # or source .venv/bin/activate
-```
+2. **Start Jupyter**: 
+   ```bash
+   jupyter lab
+   ```
 
-Launch Jupyter or JupyterLab:
+3. **Open a notebook in notebooks/**:
+   - `ai/web_qa_agent_with_thordata.ipynb`
+   - `devtools/github_repo_intel.ipynb`
+   - `rag/rag_openai_research.ipynb`
 
-```bash
-jupyter lab
-# or
-jupyter notebook
-```
+> **Tip**: Set `USE_LIVE_THORDATA = False` in notebooks to use cached data and save credits during development.
 
-Open one of the notebooks under notebooks/:
+---
 
-- `ai/web_qa_agent_with_thordata.ipynb`
-- `devtools/github_repo_intel.ipynb`
-- `rag/rag_openai_research.ipynb`
-
-Each notebook supports:
-
-- **Live mode** — call Thordata APIs and cache results under data/
-- **Offline mode** — reuse cached HTML/JSON/Markdown from data/ to avoid
-  consuming additional credits during development.
-
-The exact toggle is usually a `USE_LIVE_THORDATA` boolean near the top of
-the notebook.
-
-## 📂 Repository structure
+## 📂 Structure
 
 ```
 thordata-cookbook/
-  notebooks/
-    ai/
-      web_qa_agent_with_thordata.ipynb   # Web Q&A Agent (SERP + Universal + LLM)
-    devtools/
-      github_repo_intel.ipynb            # GitHub repository intelligence
-    rag/
-      rag_openai_research.ipynb          # RAG-ready knowledge base prep
-
-  scripts/
-    rag_data_pipeline.py                 # CLI version of RAG data pipeline
-    mcp_server.py                        # MCP server exposing Thordata tools
-    test_mcp_tools.py                    # Local tester for MCP tools
-
-  data/                                  # Cached HTML/JSON/Markdown (git-ignored)
-  requirements.txt
-  .env.example
-  .gitignore
-  README.md
-  LICENSE
+├── notebooks/             # Jupyter notebooks by category
+│   ├── ai/
+│   ├── devtools/
+│   └── rag/
+├── scripts/               # Standalone Python scripts (CLI / Servers)
+│   ├── rag_data_pipeline.py
+│   └── mcp_server.py
+├── data/                  # Local cache (git-ignored)
+├── requirements.txt
+├── .env.example
+└── README.md
 ```
 
-## 📝 Notes
-
-- **Python version**: The examples are tested primarily on Python 3.10–3.11.
-  Newer versions (e.g. 3.12/3.14) may require dependency updates (Pydantic,
-  LangChain, etc.).
-- **Data privacy**: The data/ directory is git-ignored and intended only for
-  local caches. Do not commit real customer data or sensitive crawl outputs.
-
-## 📬 Support & Feedback
-
-If you have ideas for new recipes, or run into issues:
-
-- Open an issue in this repository, or
-- Use the [thordata-python-sdk issue tracker](https://github.com/Thordata/thordata-python-sdk/issues)
-  if the problem looks SDK-related.
-
-We are especially interested in:
-
-- New AI / RAG / analytics use cases built on top of Thordata
-- Integrations with LangChain, MCP, n8n, Airflow, etc.
-
 ---
+
+## 📬 Support
+
+If you have ideas for new recipes, please open an issue or submit a PR!
+
+For SDK-specific questions, visit the [thordata-python-sdk repository](https://github.com/Thordata/thordata-python-sdk).

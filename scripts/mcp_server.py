@@ -196,7 +196,12 @@ def search_web(
     except Exception as exc:
         logger.exception("search_web failed: %s", exc)
         return json.dumps(
-            {"engine": engine_key, "query": query, "error_type": "unknown", "error": str(exc)},
+            {
+                "engine": engine_key,
+                "query": query,
+                "error_type": "unknown",
+                "error": str(exc),
+            },
             ensure_ascii=False,
             indent=2,
         )
@@ -204,7 +209,11 @@ def search_web(
     organic: List[Dict] = results.get("organic") or []
     if not organic:
         return json.dumps(
-            {"message": "No organic results found.", "engine": engine_key, "query": query},
+            {
+                "message": "No organic results found.",
+                "engine": engine_key,
+                "query": query,
+            },
             ensure_ascii=False,
             indent=2,
         )
