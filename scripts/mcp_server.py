@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
@@ -40,6 +41,7 @@ from thordata import (
     ThordataRateLimitError,
     ThordataAuthError,
     ThordataAPIError,
+    ThordataConfigError,
 )
 
 # ---------------------------------------------------------------------------
@@ -53,21 +55,25 @@ load_dotenv(ENV_PATH)
 
 logger = logging.getLogger("thordata.mcp")
 
-SCRAPER_TOKEN = os.getenv("THORDATA_SCRAPER_TOKEN")
-PUBLIC_TOKEN = os.getenv("THORDATA_PUBLIC_TOKEN")
-PUBLIC_KEY = os.getenv("THORDATA_PUBLIC_KEY")
 
-if not SCRAPER_TOKEN:
-    raise RuntimeError(
-        "THORDATA_SCRAPER_TOKEN is missing. "
-        "Please create a .env file at the project root and set your tokens."
+@lru_cache
+def get_thordata_client() -> ThordataClient:
+    scraper_token = os.getenv("THORDATA_SCRAPER_TOKEN")
+    public_token = os.getenv("THORDATA_PUBLIC_TOKEN")
+    public_key = os.getenv("THORDATA_PUBLIC_KEY")
+
+    if not scraper_token:
+        raise ThordataConfigError(
+            "THORDATA_SCRAPER_TOKEN is missing. "
+            "Please create a .env file at the project root and set your tokens."
+        )
+
+    return ThordataClient(
+        scraper_token=scraper_token,
+        public_token=public_token,
+        public_key=public_key,
     )
 
-client = ThordataClient(
-    scraper_token=SCRAPER_TOKEN,
-    public_token=PUBLIC_TOKEN,
-    public_key=PUBLIC_KEY,
-)
 
 # Name visible to the MCP client (e.g. Claude)
 mcp = FastMCP("Thordata Tools")
@@ -86,7 +92,7 @@ _ENGINE_MAP: Dict[str, Engine] = {
 
 def clean_html_to_text(html: str) -> str:
     """
-    Convert raw HTML into a cleaned plain-text representation.
+    Convert raw html into a cleaned plain-text representation.
 
     - Removes scripts, styles, navigation, footers, SVGs, iframes.
     - Collapses whitespace and drops empty lines.
@@ -154,6 +160,8 @@ def search_web(
         extra_params["type"] = search_type
 
     try:
+        client = get_thordata_client()
+
         results = client.serp_search(
             query=query,
             engine=engine_enum,
@@ -188,6 +196,17 @@ def search_web(
                 "engine": engine_key,
                 "query": query,
                 "error_type": "thordata_api",
+                "error": str(e),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except ThordataConfigError as e:
+        return json.dumps(
+            {
+                "engine": engine_key,
+                "query": query,
+                "error_type": "thordata_config",
                 "error": str(e),
             },
             ensure_ascii=False,
@@ -291,10 +310,12 @@ def read_website(
     )
 
     try:
+        client = get_thordata_client()
+
         html = client.universal_scrape(
             url=url,
             js_render=js_render,
-            output_format="HTML",
+            output_format="html",
             country=country,
         )
     except ThordataRateLimitError as e:
@@ -303,6 +324,8 @@ def read_website(
         return f"Thordata Universal API authentication error: {e}"
     except ThordataAPIError as e:
         return f"Thordata Universal API returned an error: {e}"
+    except ThordataConfigError as e:
+        return f"Thordata configuration error: {e}"
     except Exception as exc:
         logger.exception("read_website failed: %s", exc)
         return f"Scrape Error: {exc!s}"
@@ -343,10 +366,12 @@ def extract_links(
     )
 
     try:
+        client = get_thordata_client()
+
         html = client.universal_scrape(
             url=url,
             js_render=js_render,
-            output_format="HTML",
+            output_format="html",
             country=country,
         )
     except ThordataRateLimitError as e:
@@ -364,6 +389,12 @@ def extract_links(
     except ThordataAPIError as e:
         return json.dumps(
             {"source": url, "error_type": "thordata_api", "error": str(e)},
+            ensure_ascii=False,
+            indent=2,
+        )
+    except ThordataConfigError as e:
+        return json.dumps(
+            {"source": url, "error_type": "thordata_config", "error": str(e)},
             ensure_ascii=False,
             indent=2,
         )
