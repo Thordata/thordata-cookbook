@@ -11,6 +11,7 @@ These recipes show how to combine:
 - Thordata **Web Scraper API**
 - Modern AI tools (OpenAI, LangChain, MCP)
 - Data tools (Pandas, BeautifulSoup)
+(Python 3.11+ recommended)
 
 ---
 
