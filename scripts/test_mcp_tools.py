@@ -15,7 +15,7 @@ def main() -> int:
         sys.path.insert(0, repo_root)
 
     # Import after sys.path adjustment (inside function to satisfy Ruff E402)
-    from scripts.mcp_server import search_web, read_page
+    from scripts.mcp_server import read_page, search_web
 
     # 1. Test web search
     print("\n=== search_web (google) ===")
