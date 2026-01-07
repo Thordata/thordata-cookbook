@@ -31,7 +31,7 @@ jobs:
       - name: Ruff
         run: |
           # Only lint code directories (avoid notebooks and large data dirs)
-          ruff check scripts tests
+          ruff check scripts tests notebooks
 
       - name: Black
         run: |

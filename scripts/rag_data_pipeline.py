@@ -21,13 +21,10 @@ import argparse
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
 
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-
 from thordata import ThordataClient
-
 
 # ---------------------------------------------------------------------------
 # Configuration & logging
@@ -70,7 +67,7 @@ def clean_html_to_markdown(html_content: str) -> str:
         tag.decompose()
 
     # 2. Collect headings and paragraphs
-    markdown_lines: List[str] = []
+    markdown_lines: list[str] = []
 
     # Headings (H1–H3)
     for heading in soup.find_all(["h1", "h2", "h3"]):
@@ -161,7 +158,7 @@ def run_pipeline(
     url: str,
     output_path: Path,
     js_render: bool = True,
-    country: Optional[str] = None,
+    country: str | None = None,
     block_resources: bool = False,
 ) -> None:
     """

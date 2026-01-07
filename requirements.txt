@@ -1,30 +1,21 @@
-aiohappyeyeballs==2.6.1
-aiohttp==3.13.2
-aiosignal==1.4.0
-attrs==25.4.0
-beautifulsoup4>=4.12.2
-certifi==2025.11.12
-charset-normalizer==3.4.4
-frozenlist==1.8.0
-idna==3.11
-multidict==6.7.0
-numpy==2.3.5
+# Core SDK
+thordata-sdk>=1.1.0
+
+# AI / LLM
+openai>=1.12.0
+langchain>=0.1.0
+langchain-community>=0.0.10
+
+# Data Processing
 pandas>=2.1.0
-propcache==0.4.1
-python-dateutil==2.9.0.post0
-pytz==2025.2
-requests>=2.31.0
-six==1.17.0
-soupsieve==2.8
-thordata_sdk>=0.5.0
-typing_extensions==4.15.0
-tzdata==2025.2
-urllib3==2.5.0
-yarl==1.22.0
+beautifulsoup4>=4.12.0
+numpy>=1.26.0
+
+# Server / API
+fastapi>=0.109.0
+uvicorn>=0.27.0
+mcp>=0.1.0
+
+# Utils
 python-dotenv>=1.0.0
-
-# MCP server
-mcp>=0.0.7
-
-# Notebooks
-jupyterlab>=4.0.0
+requests>=2.31.0

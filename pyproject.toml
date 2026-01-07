@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+ignore_missing_imports = true

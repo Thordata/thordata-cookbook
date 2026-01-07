@@ -15,27 +15,19 @@ def main() -> int:
         sys.path.insert(0, repo_root)
 
     # Import after sys.path adjustment (inside function to satisfy Ruff E402)
-    from scripts.mcp_server import extract_links, read_website, search_news, search_web
+    from scripts.mcp_server import search_web, read_page
 
     # 1. Test web search
     print("\n=== search_web (google) ===")
+    # Note: Function call might fail if no credentials in .env, but we want to see it run
     result = search_web("Thordata proxy network", engine="google", num=3)
     pprint(result)
 
-    # 2. Test news search
-    print("\n=== search_news (google) ===")
-    news = search_news("AI data infrastructure", engine="google", num=3)
-    pprint(news)
-
-    # 3. Test read_website
-    print("\n=== read_website ===")
-    text = read_website("https://www.example.com", js_render=False, max_chars=500)
+    # 2. Test read_page (Universal)
+    print("\n=== read_page ===")
+    # Using a simple URL to avoid heavy billing or long wait
+    text = read_page("https://example.com", js_render=False)
     print(text[:500])
-
-    # 4. Test extract_links
-    print("\n=== extract_links ===")
-    links_json = extract_links("https://www.example.com", js_render=False, max_links=10)
-    pprint(links_json)
 
     return 0
 
